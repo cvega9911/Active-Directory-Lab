@@ -267,5 +267,5 @@ The quick version, for anyone skimming:
 - Control test from the client with my own admin account
 - More GPOs: a desktop wallpaper, software restrictions, a logon script
 - Account lockout policy, and testing what a locked out user looks like from the help desk side
-- A small k3s cluster on the same Proxmox host; I've been told its overkill for a home lab but I want those exp points.
+- A small k3s cluster on the same Proxmox host; I've been told its overkill for a home lab but I want the exp
 - Syncing users to Microsoft Entra ID with Entra Connect
