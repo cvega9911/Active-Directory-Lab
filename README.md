@@ -2,7 +2,7 @@
 
 I built a Windows domain from scratch on a used mini PC. There's a Windows Server 2025 domain controller, a Windows 11 client joined to it, a file share, and a few Group Policies you can actually see working. It all runs as VMs on Proxmox, and every screenshot in here is from my own build (mistakes included, there were a few).
 
-I built this to get real hands-on time with the stuff help desk and sysadmin roles live in every day: AD users and groups, DNS, domain joins, shares, permissions and GPOs.
+I built this to get real hands on time with the stuff help desk and sysadmin roles live in every day: AD users and groups, DNS, domain joins, shares, permissions and GPOs.
 
 ## The setup
 
@@ -30,17 +30,17 @@ I built this to get real hands-on time with the stuff help desk and sysadmin rol
  lab.local                     joined to lab.local
 ```
 
-The M720q came off eBay, so before anything else I ran MemTest86+ overnight (9 passes, zero errors) and checked the SSD in CrystalDiskInfo: 99% health, about 7.7TB written. Fine for a lab.
+The M720q came off eBay. Before trusting it with anything, I ran MemTest86+ overnight (9 passes, zero errors) and checked the SSD in CrystalDiskInfo: 99% health, about 7.7TB written. Fine for a lab, and better than I expected from a box that probably spent its last life under someone's cubicle desk.
 
-About the domain name: `.local` works for a Windows-only lab, but it's not what you'd pick for a real company (it can clash with Apple's Bonjour/mDNS, and it isn't a domain you can own). I'd use a subdomain of a real domain next time.
+About the domain name: `.local` works for a lab that's all Windows, but it's not what you'd pick for a real company (it can clash with Apple's Bonjour/mDNS, and it isn't a domain you can own). Next time I'd use a subdomain of a real domain.
 
 ## 1. Proxmox
 
-Proxmox went on bare metal (ext4 on the NVMe), with the box's IP reserved in my router so the web interface stays at the same address. A fresh install points at the paid enterprise repos, so the first update fails. I disabled those and added the free no-subscription repo.
+Proxmox went on bare metal (ext4 on the NVMe), and I reserved the box's IP in my router so that the web interface stays at the same address. A fresh install points at the paid enterprise repos, which means the very first update fails. I disabled those and added the free no subscription repo.
 
 ![Proxmox dashboard after install](screenshots/01-proxmox-dashboard.png)
 
-![Enterprise repos disabled, no-subscription repo enabled](screenshots/02-proxmox-no-subscription-repo.png)
+![Enterprise repos disabled, no subscription repo enabled](screenshots/02-proxmox-no-subscription-repo.png)
 
 ## 2. Building dc01
 
@@ -48,11 +48,11 @@ I uploaded the Windows Server 2025 evaluation ISO plus the VirtIO driver ISO, th
 
 ![VM system settings](screenshots/03-dc01-vm-system-settings.png)
 
-I picked the Desktop Experience edition. The default option is Server Core (command line only), which I'll get to eventually, but not while learning AD.
+I picked the Desktop Experience edition. The default option is Server Core (command line only), which I'll get to eventually, but not while I'm still learning AD.
 
 ![Picking Desktop Experience](screenshots/04-server-2025-desktop-experience.png)
 
-Setup showed no disks at all. Windows doesn't ship a driver for the VirtIO disk controller, so I had to hit Load Driver and point it at the `vioscsi` folder on the VirtIO disc.
+Setup showed no disks at all. Windows doesn't come with a driver for the VirtIO disk controller, and the fix was hitting Load Driver and pointing it at the `vioscsi` folder on the VirtIO disc.
 
 ![No disks until the VirtIO driver is loaded](screenshots/05-no-disks-until-driver-loaded.png)
 
@@ -66,7 +66,7 @@ Before touching AD: renamed the server to `dc01` (renaming a DC after promotion 
 
 ![Static IP on dc01](screenshots/08-dc01-static-ip.png)
 
-I took a Proxmox snapshot here (`pre-ad`) so I had a clean rollback point, and kept snapshotting after every big step (`ad-installed` after promotion, `ad-populated` after the users and groups).
+I took a Proxmox snapshot here (`pre-ad`) so that I had a clean rollback point, and kept snapshotting after every big step (`ad-installed` after promotion, `ad-populated` after the users and groups). Cheap insurance against my own late night decisions.
 
 ![dc01 snapshot chain](screenshots/22-dc01-snapshot-chain.png)
 
@@ -78,7 +78,7 @@ Added the Active Directory Domain Services role, then promoted the server into a
 
 ![New forest, lab.local](screenshots/10-new-forest-lab-local.png)
 
-The prerequisite check passed with two warnings. One is about IPv6 not being static (IPv4 is static, IPv6 is still whatever the router gives it, which is fine for a lab but not how you'd leave a real DC) and the other is a DNS delegation warning, which doesn't apply since there's no parent zone above `lab.local`.
+The prerequisite check passed with two warnings. One is about IPv6 not being static (IPv4 is static, IPv6 is still whatever the router gives it, which is fine for a lab but not how you'd leave a real DC). The other is a DNS delegation warning, and there's no parent zone above `lab.local` for it to matter.
 
 ![Prerequisites check](screenshots/11-prerequisites-check.png)
 
@@ -88,11 +88,11 @@ After the reboot, the promotion had already pointed dc01's DNS at itself (`127.0
 
 ![DNS pointed at itself after promotion](screenshots/12-dns-pointed-at-itself.png)
 
-dc01 still needs to resolve things like google.com, so I added forwarders: my router and Cloudflare (`1.1.1.1`). Anything dc01 doesn't know about gets passed along.
+dc01 still needs to resolve things like google.com. For that I added forwarders: my router and Cloudflare (`1.1.1.1`). Anything dc01 doesn't know about gets passed along.
 
 ![DNS forwarders](screenshots/13-dns-forwarders.png)
 
-`nslookup` kept showing the server as "UnKnown," so I built a reverse lookup zone for `192.168.1.x` and added a PTR record for dc01 (a PTR record is just the reverse of an A record: IP to name instead of name to IP).
+`nslookup` kept showing the server as "UnKnown," and to fix that I built a reverse lookup zone for `192.168.1.x` and added a PTR record for dc01 (a PTR record is just the reverse of an A record: IP to name instead of name to IP).
 
 ![Reverse lookup zone](screenshots/14-reverse-lookup-zone.png)
 
@@ -100,7 +100,7 @@ dc01 still needs to resolve things like google.com, so I added forwarders: my ro
 
 ![Reverse lookup working](screenshots/16-nslookup-reverse.png)
 
-(The "UnKnown" stuck around anyway because nslookup was asking over the IPv6 loopback `::1`, which has no reverse record. Lookups work fine, so I let that one go instead of chasing it down a rabbit hole.)
+(The "UnKnown" stuck around anyway because nslookup was asking over the IPv6 loopback `::1`, which has no reverse record. Lookups work fine, and I decided that rabbit hole could stay unexplored.)
 
 ## 5. dcdiag (and reading the noise)
 
@@ -108,22 +108,22 @@ dc01 still needs to resolve things like google.com, so I added forwarders: my ro
 
 ![dcdiag primary tests](screenshots/17-dcdiag-primary-tests.png)
 
-Digging into the SystemLog output, everything it flagged was logged within about a minute of the first boot after promotion: DNS lookups timing out before the DNS service was up (some of them using my router's `lan` suffix), WinRM starting before the domain was ready, the time service pointing out there's no external time source, and one error from the Security Account Manager failing a Kerberos request. That error is what actually fails the test, and it lines up with the server coming up before its own DNS did. Logins and the rest of the lab worked fine after that, and those two tests only look at the last 24 hours of events, so they should clear once those age out. (Re-running dcdiag to confirm is on my list.)
+Digging into the SystemLog output, everything it flagged was logged within about a minute of the first boot after promotion: DNS lookups timing out before the DNS service was up (some of them using my router's `lan` suffix), WinRM starting before the domain was ready, the time service pointing out there's no external time source, and one error from the Security Account Manager failing a Kerberos request. That error is what actually fails the test, and it lines up with the server coming up before its own DNS did. Logins and the rest of the lab worked fine after that, and those two tests only look at the last 24 hours of events, which means they should clear once those age out. (Running dcdiag again to confirm is on my list.)
 
 ![The warnings, all from first boot](screenshots/18-dcdiag-systemlog-warnings.png)
 
 ![Partition and enterprise tests passing](screenshots/19-dcdiag-enterprise-tests.png)
 
-That's the part I'd actually use at a help desk: figuring out which errors matter and which ones are just the server waking up.
+That's the part I'd actually use at a help desk: figuring out which errors matter and which ones are just the server waking up and grumbling before its coffee.
 
 ## 6. Users, groups and OUs
 
-I went to make an OU called "Users" and AD said no, there's already one. Turns out the built-in Users and Computers aren't OUs at all, they're plain containers, and you can't link Group Policy to them. That's the whole reason to make your own. I created:
+I went to make an OU called "Users" and AD said no, there's already one. Turns out the default Users and Computers folders aren't OUs at all, they're plain containers, and you can't link Group Policy to them. That's the whole reason to make your own. I created:
 
 - **Lab Users**, **Lab Computers**, **Servers**, **Groups**, and later **Staff**
 - Test users John Smith (`jsmith`) and Mary Jones (`mjones`)
 - Security groups Accounting and Marketing
-- My own admin account in Domain Admins, so I'm not using the built-in Administrator for everything
+- My own admin account in Domain Admins, so that I'm not using the default Administrator for everything
 
 ![Security group membership](screenshots/20-security-group-members.png)
 
@@ -137,7 +137,7 @@ The client is VM 101: Windows 11 Enterprise evaluation, UEFI with a TPM, and Vir
 
 ![Wrong disc, no drivers](screenshots/23-client-wrong-driver-disc.png)
 
-A computer can only join a domain if it can find the DC, and it finds the DC through DNS. So the client keeps getting its IP from the router but uses dc01 (and only dc01) for DNS. I set that on the client itself and didn't touch the router, so the rest of the apartment keeps working normally.
+A computer can only join a domain if it can find the DC, and it finds the DC through DNS. That's why the client keeps getting its IP from the router but uses dc01 (and only dc01) for DNS. I set that on the client itself and didn't touch the router, so that the rest of the apartment keeps working normally.
 
 ![Client DNS pointed at dc01](screenshots/24-client-dns-pointed-at-dc.png)
 
@@ -157,7 +157,7 @@ Then the join itself told me my username was invalid. I retyped it a bunch of ti
 
 ![The specified username is invalid](screenshots/28-join-username-invalid.png)
 
-I ended up renaming the client and doing the join in PowerShell, mostly because you can see exactly what you typed. These were run separately, since each one restarts the machine:
+I ended up renaming the client and doing the join in PowerShell, mostly because you can see exactly what you typed. Each command restarts the machine, which meant running them one at a time:
 
 ```powershell
 Rename-Computer -NewName WIN11-CLIENT -Restart
@@ -173,7 +173,7 @@ After the restart I logged in as `LAB\jsmith`, a domain user that only exists on
 
 ![Client joined to lab.local](screenshots/31-client-joined-lab-local.png)
 
-New computers land in the built-in Computers container. Domain-wide policies still apply there, but you can't link a GPO to it, so I moved the client into Lab Computers where I can target it later. Then I snapshotted it.
+New computers land in the default Computers container. Policies linked to the whole domain still apply there, but you can't link a GPO to it directly. I moved the client into Lab Computers so that I can target it later, then snapshotted it.
 
 ![Client in the Lab Computers OU](screenshots/32-client-in-lab-computers-ou.png)
 
@@ -181,7 +181,7 @@ New computers land in the built-in Computers container. Domain-wide policies sti
 
 ## 8. A file share
 
-I made a Staff OU and moved both test users into it. My admin account stays out of it on purpose, so the restrictive policies never land on me.
+I made a Staff OU and moved both test users into it. My admin account stays out of it on purpose, so that the restrictive policies never land on me. (Locking myself out of my own lab is a bit I'd like to skip.)
 
 ![Staff OU](screenshots/34-staff-ou.png)
 
@@ -196,7 +196,7 @@ net share Company=C:\Shares\Company /grant:"LAB\Domain Users",full
 
 ![Share created](screenshots/36-net-share-success.png)
 
-Shares have two sets of permissions stacked on top of each other: share permissions (only checked when you come in over the network) and NTFS permissions (checked every time, network or not). Whichever is stricter wins. The share gave Domain Users Full, but the NTFS permissions were mostly read-only, so I gave Domain Users Modify on the folder. Net result over the network is Modify, which is what I wanted.
+Shares have two sets of permissions stacked on top of each other: share permissions (only checked when you come in over the network) and NTFS permissions (checked every time, network or not). Whichever is stricter wins. The share gave Domain Users Full, but the NTFS permissions were mostly read only, and I gave Domain Users Modify on the folder to fix that. Net result over the network is Modify, which is what I wanted.
 
 ![NTFS Modify for Domain Users](screenshots/37-ntfs-modify.png)
 
@@ -210,7 +210,7 @@ Three policies:
 | Staff - Drive Map | Staff OU | Maps `\\dc01\Company` as the S: drive |
 | Staff - Lockdown | Staff OU | Blocks Control Panel and the Settings app |
 
-Password rules for domain accounts only take effect from a GPO linked to the domain itself (linking one to an OU does nothing for domain passwords), so I just set them in the Default Domain Policy. Different rules per group is a separate feature (fine-grained password policies) that I haven't touched yet.
+Password rules for domain accounts only take effect from a GPO linked to the domain itself (linking one to an OU does nothing for domain passwords). That's why I set them in the Default Domain Policy. Different rules per group is a separate feature (fine grained password policies) that I haven't touched yet.
 
 ![Password policy](screenshots/38-password-policy.png)
 
@@ -230,11 +230,11 @@ Logged into the client as `jsmith` and ran `gpupdate /force`. The S: drive showe
 
 ![gpresult for jsmith](screenshots/43-gpresult-jsmith.png)
 
-And Settings wouldn't open at all. Clicking it did nothing, and right clicking it doesn't even give you an Open option anymore:
+And Settings wouldn't open at all. Clicking it did nothing, and right clicking it doesn't even give you an Open option anymore. (Sorry John.)
 
 ![Settings blocked for jsmith](screenshots/44-settings-blocked.png)
 
-For a quick control test, I ran `gpresult /r` as the domain Administrator on dc01 (that account isn't in the Staff OU). No user GPOs applied, so the Staff policies aren't leaking onto accounts outside Staff. A better test would be logging into the same client with my own admin account, which is on the list.
+For a quick control test, I ran `gpresult /r` as the domain Administrator on dc01 (that account isn't in the Staff OU). No user GPOs applied, which means the Staff policies aren't leaking onto accounts outside Staff. A better test would be logging into the same client with my own admin account, and that's on the list.
 
 ![gpresult for Administrator, nothing applied](screenshots/45-gpresult-admin-control.png)
 
@@ -245,7 +245,7 @@ The quick version, for anyone skimming:
 | Problem | Fix |
 |---|---|
 | Windows setup showed no disks | Load the `vioscsi` driver from the VirtIO disc |
-| dcdiag failed DFSREvent and SystemLog | First-boot events, nothing actually broken |
+| dcdiag failed DFSREvent and SystemLog | Events from the first boot, nothing actually broken |
 | Client couldn't find lab.local | It was asking the router's IPv6 DNS server first |
 | "The specified username is invalid" | `/` instead of `\` |
 | `net share` printed its help text | One stray space after the comma |
@@ -253,19 +253,19 @@ The quick version, for anyone skimming:
 ## What I didn't do (on purpose)
 
 - **No DHCP role on dc01.** My router already hands out addresses, and two DHCP servers on one network will fight each other. That waits until I've got my own firewall/router running.
-- **No changes to my home router's DNS.** Only the lab machines use dc01, so nothing else in the apartment breaks if the lab is down.
+- **No changes to my home router's DNS.** Only the lab machines use dc01. If the lab goes down, nothing else in the apartment notices (and nobody comes asking why the TV stopped working).
 
 ## Notes
 
 - No passwords appear anywhere in this repo or the screenshots.
 - My public IPv6 addresses are blacked out in the screenshots. The `192.168.x.x` addresses are private and only mean something inside my apartment.
-- Both Windows VMs are eval editions, so they'll expire eventually (that's what the snapshots are for).
+- Both Windows VMs are eval editions and will expire eventually (that's what the snapshots are for).
 
 ## What's next
 
-- Re-run dcdiag and point dc01 at an external time source (that NtpClient warning)
+- Run dcdiag again and point dc01 at an external time source (that NtpClient warning)
 - Control test from the client with my own admin account
 - More GPOs: a desktop wallpaper, software restrictions, a logon script
-- Account lockout policy, and testing what a locked-out user looks like from the help desk side
+- Account lockout policy, and testing what a locked out user looks like from the help desk side
 - A small k3s cluster on the same Proxmox host
-- Syncing users to Microsoft Entra ID with Entra Connect (needs a real UPN suffix added, since Entra won't take `@lab.local`)
+- Syncing users to Microsoft Entra ID with Entra Connect
