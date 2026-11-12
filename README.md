@@ -1,6 +1,6 @@
 # Active Directory Lab
 
-A Windows domain built from scratch on a used mini PC: a Windows Server 2025 domain controller, a domain-joined Windows 11 client, a file share, and Group Policy that actually does something you can see. Everything runs as VMs on Proxmox, and every screenshot in here is from my own build (mistakes included, because those taught me the most).
+I built a Windows domain from scratch on a used mini PC. There's a Windows Server 2025 domain controller, a Windows 11 client joined to it, a file share, and a few Group Policies you can actually see working. It all runs as VMs on Proxmox, and every screenshot in here is from my own build (mistakes included, there were a few).
 
 I built this to get real hands-on time with the stuff help desk and sysadmin roles live in every day: AD users and groups, DNS, domain joins, shares, permissions and GPOs.
 
@@ -16,7 +16,7 @@ I built this to get real hands-on time with the stuff help desk and sysadmin rol
 
 ```
             Home router (192.168.1.1)
-            DHCP for the house, internet
+            DHCP for the apartment, internet
                        |
           +------------+------------+
           |                         |
@@ -30,7 +30,9 @@ I built this to get real hands-on time with the stuff help desk and sysadmin rol
  lab.local                     joined to lab.local
 ```
 
-Before any of this I put the M720q through its paces since it came off eBay: MemTest86+ ran 9 passes overnight with zero errors, and CrystalDiskInfo showed the SSD at 99% health with about 7.7TB written. Good enough to trust with a lab.
+The M720q came off eBay, so before anything else I ran MemTest86+ overnight (9 passes, zero errors) and checked the SSD in CrystalDiskInfo: 99% health, about 7.7TB written. Fine for a lab.
+
+About the domain name: `.local` works for a Windows-only lab, but it's not what you'd pick for a real company (it can clash with Apple's Bonjour/mDNS, and it isn't a domain you can own). I'd use a subdomain of a real domain next time.
 
 ## 1. Proxmox
 
@@ -64,7 +66,9 @@ Before touching AD: renamed the server to `dc01` (renaming a DC after promotion 
 
 ![Static IP on dc01](screenshots/08-dc01-static-ip.png)
 
-I took a Proxmox snapshot here (`pre-ad`) so I had a clean rollback point.
+I took a Proxmox snapshot here (`pre-ad`) so I had a clean rollback point, and kept snapshotting after every big step (`ad-installed` after promotion, `ad-populated` after the users and groups).
+
+![dc01 snapshot chain](screenshots/22-dc01-snapshot-chain.png)
 
 ## 3. Promoting dc01 to a domain controller
 
@@ -74,7 +78,7 @@ Added the Active Directory Domain Services role, then promoted the server into a
 
 ![New forest, lab.local](screenshots/10-new-forest-lab-local.png)
 
-The prerequisite check passed with two warnings. One is about IPv6 not being static (my IPv4 is, which is what matters here) and the other is a DNS delegation warning, which doesn't apply since there's no parent zone above `lab.local`.
+The prerequisite check passed with two warnings. One is about IPv6 not being static (IPv4 is static, IPv6 is still whatever the router gives it, which is fine for a lab but not how you'd leave a real DC) and the other is a DNS delegation warning, which doesn't apply since there's no parent zone above `lab.local`.
 
 ![Prerequisites check](screenshots/11-prerequisites-check.png)
 
@@ -104,13 +108,13 @@ dc01 still needs to resolve things like google.com, so I added forwarders: my ro
 
 ![dcdiag primary tests](screenshots/17-dcdiag-primary-tests.png)
 
-Digging into the SystemLog output, every single warning was stamped within the same minute as the first boot after promotion: DNS lookups timing out before the DNS service was up, WinRM starting before the domain was ready, and the time service pointing out there's no external time source. Those two tests just scan recent events, so they fail on startup noise and clear on their own once those events age out.
+Digging into the SystemLog output, everything it flagged was logged within about a minute of the first boot after promotion: DNS lookups timing out before the DNS service was up (some of them using my router's `lan` suffix), WinRM starting before the domain was ready, the time service pointing out there's no external time source, and one error from the Security Account Manager failing a Kerberos request. That error is what actually fails the test, and it lines up with the server coming up before its own DNS did. Logins and the rest of the lab worked fine after that, and those two tests only look at the last 24 hours of events, so they should clear once those age out. (Re-running dcdiag to confirm is on my list.)
 
 ![The warnings, all from first boot](screenshots/18-dcdiag-systemlog-warnings.png)
 
 ![Partition and enterprise tests passing](screenshots/19-dcdiag-enterprise-tests.png)
 
-Telling real problems apart from noise was probably the most useful thing I got out of this section.
+That's the part I'd actually use at a help desk: figuring out which errors matter and which ones are just the server waking up.
 
 ## 6. Users, groups and OUs
 
@@ -125,9 +129,7 @@ I went to make an OU called "Users" and AD said no, there's already one. Turns o
 
 ![My admin account in Domain Admins](screenshots/21-my-admin-account-domain-admins.png)
 
-Side quest: I made a test OU with "Protect from accidental deletion" checked and then couldn't delete it. The setting lives on the Object tab, and that tab only shows up after you turn on View > Advanced Features. (It works exactly as advertised. It protected it from me.)
-
-![dc01 snapshot chain](screenshots/22-dc01-snapshot-chain.png)
+Side quest: I made a test OU with "Protect from accidental deletion" checked and then couldn't delete it. The setting lives on the Object tab, and that tab only shows up after you turn on View > Advanced Features. (Works exactly as advertised. It protected the OU from me.)
 
 ## 7. The Windows 11 client and the domain join
 
@@ -139,7 +141,7 @@ A computer can only join a domain if it can find the DC, and it finds the DC thr
 
 ![Client DNS pointed at dc01](screenshots/24-client-dns-pointed-at-dc.png)
 
-That still failed. `nslookup lab.local` was going to my ISP's DNS server, which has obviously never heard of my lab domain.
+That still failed. `nslookup lab.local` was going to the IPv6 DNS server my router hands out, which has obviously never heard of my lab domain.
 
 ![nslookup asking the wrong server](screenshots/25-client-nslookup-fails.png)
 
@@ -147,18 +149,19 @@ Asking dc01 directly worked, which proved the DC was fine and the client was jus
 
 ![Asking dc01 directly works](screenshots/26-client-nslookup-direct-to-dc.png)
 
-The cause was IPv6. My router hands out an IPv6 DNS server, and Windows was preferring it over the IPv4 one I set. I turned off IPv6 on the client's adapter and flushed DNS, and dc01 became the only DNS server it knew about.
+The cause was IPv6. Windows was preferring the router's IPv6 DNS server over the IPv4 one I set. I turned off IPv6 on the client's adapter and flushed DNS, and dc01 became the only DNS server it knew about. (That's a lab shortcut. Microsoft doesn't recommend disabling IPv6, and the cleaner fix is giving the client's IPv6 settings dc01's address as DNS too.)
 
 ![DNS fixed, dc01 is the only DNS server](screenshots/27-client-dns-fixed.png)
 
-Then the join itself told me my username was invalid. I tried every variation I could think of. The actual problem: I was typing `LAB/Administrator` with a forward slash instead of `LAB\Administrator`. (In my defense, it was late.)
+Then the join itself told me my username was invalid. I retyped it a bunch of times before I noticed I was using a forward slash (`LAB/Administrator`) instead of a backslash. (In my defense, it was late.)
 
 ![The specified username is invalid](screenshots/28-join-username-invalid.png)
 
-I ended up doing the join in PowerShell with `Add-Computer`, mostly because you can see exactly what you typed.
+I ended up renaming the client and doing the join in PowerShell, mostly because you can see exactly what you typed. These were run separately, since each one restarts the machine:
 
 ```powershell
 Rename-Computer -NewName WIN11-CLIENT -Restart
+# after the reboot:
 Add-Computer -DomainName lab.local -Credential LAB\Administrator -Restart
 ```
 
@@ -170,7 +173,7 @@ After the restart I logged in as `LAB\jsmith`, a domain user that only exists on
 
 ![Client joined to lab.local](screenshots/31-client-joined-lab-local.png)
 
-New computers land in the built-in Computers container, so I moved it into Lab Computers where policies can reach it, then snapshotted the client.
+New computers land in the built-in Computers container. Domain-wide policies still apply there, but you can't link a GPO to it, so I moved the client into Lab Computers where I can target it later. Then I snapshotted it.
 
 ![Client in the Lab Computers OU](screenshots/32-client-in-lab-computers-ou.png)
 
@@ -193,7 +196,7 @@ net share Company=C:\Shares\Company /grant:"LAB\Domain Users",full
 
 ![Share created](screenshots/36-net-share-success.png)
 
-A share has two layers of permissions: share permissions (who can get in over the network) and NTFS permissions (what they can do with the files). The more restrictive one wins. The share was Full for Domain Users, but NTFS only gave them read, so I added Modify. Net result is Modify, which is what I wanted.
+Shares have two sets of permissions stacked on top of each other: share permissions (only checked when you come in over the network) and NTFS permissions (checked every time, network or not). Whichever is stricter wins. The share gave Domain Users Full, but the NTFS permissions were mostly read-only, so I gave Domain Users Modify on the folder. Net result over the network is Modify, which is what I wanted.
 
 ![NTFS Modify for Domain Users](screenshots/37-ntfs-modify.png)
 
@@ -207,7 +210,7 @@ Three policies:
 | Staff - Drive Map | Staff OU | Maps `\\dc01\Company` as the S: drive |
 | Staff - Lockdown | Staff OU | Blocks Control Panel and the Settings app |
 
-The password policy has to live at the domain level. That's the only place Windows enforces password rules for domain accounts, which is why it went in the Default Domain Policy instead of its own GPO.
+Password rules for domain accounts only take effect from a GPO linked to the domain itself (linking one to an OU does nothing for domain passwords), so I just set them in the Default Domain Policy. Different rules per group is a separate feature (fine-grained password policies) that I haven't touched yet.
 
 ![Password policy](screenshots/38-password-policy.png)
 
@@ -231,23 +234,21 @@ And Settings wouldn't open at all. Clicking it did nothing, and right clicking i
 
 ![Settings blocked for jsmith](screenshots/44-settings-blocked.png)
 
-For the control test, I ran the same thing as the domain Administrator on dc01. No user GPOs applied, so the lockdown only hits the people it's meant for:
+For a quick control test, I ran `gpresult /r` as the domain Administrator on dc01 (that account isn't in the Staff OU). No user GPOs applied, so the Staff policies aren't leaking onto accounts outside Staff. A better test would be logging into the same client with my own admin account, which is on the list.
 
 ![gpresult for Administrator, nothing applied](screenshots/45-gpresult-admin-control.png)
 
 ## Problems I ran into
 
-| Problem | Cause | Fix |
-|---|---|---|
-| Windows setup showed no disks | No built-in driver for the VirtIO disk controller | Load Driver from `vioscsi` on the VirtIO disc |
-| "No drivers were found" on the client | Browsed the Windows install disc instead of the VirtIO disc | Picked the `virtio-win` drive |
-| nslookup showed "UnKnown" | No reverse zone, then querying over IPv6 loopback | Added a reverse zone and PTR record, left the cosmetic part alone |
-| dcdiag failed DFSREvent and SystemLog | Events logged during the first boot after promotion | Nothing broken, they clear as the events age out |
-| Couldn't create an OU named Users | Built-in Users container already uses the name | Named mine Lab Users |
-| Couldn't delete a test OU | Protect from accidental deletion | Advanced Features > Object tab > uncheck it |
-| Client couldn't find lab.local | Windows preferred the router's IPv6 DNS server | Disabled IPv6 on the client adapter, flushed DNS |
-| "The specified username is invalid" | Typed `/` instead of `\` | `LAB\Administrator`, joined with PowerShell |
-| `net share` printed its help text | One space after the comma in `/grant` | Removed the space |
+The quick version, for anyone skimming:
+
+| Problem | Fix |
+|---|---|
+| Windows setup showed no disks | Load the `vioscsi` driver from the VirtIO disc |
+| dcdiag failed DFSREvent and SystemLog | First-boot events, nothing actually broken |
+| Client couldn't find lab.local | It was asking the router's IPv6 DNS server first |
+| "The specified username is invalid" | `/` instead of `\` |
+| `net share` printed its help text | One stray space after the comma |
 
 ## What I didn't do (on purpose)
 
@@ -258,12 +259,13 @@ For the control test, I ran the same thing as the domain Administrator on dc01. 
 
 - No passwords appear anywhere in this repo or the screenshots.
 - My public IPv6 addresses are blacked out in the screenshots. The `192.168.x.x` addresses are private and only mean something inside my apartment.
-- Both Windows VMs are evaluation editions, so this is a lab, not something to run long term. Snapshots make rebuilding easy.
+- Both Windows VMs are eval editions, so they'll expire eventually (that's what the snapshots are for).
 
 ## What's next
 
-- Point dc01 at an external time source (that NtpClient warning)
+- Re-run dcdiag and point dc01 at an external time source (that NtpClient warning)
+- Control test from the client with my own admin account
 - More GPOs: a desktop wallpaper, software restrictions, a logon script
 - Account lockout policy, and testing what a locked-out user looks like from the help desk side
 - A small k3s cluster on the same Proxmox host
-- Syncing `lab.local` to Microsoft Entra ID with Entra Connect
+- Syncing users to Microsoft Entra ID with Entra Connect (needs a real UPN suffix added, since Entra won't take `@lab.local`)
