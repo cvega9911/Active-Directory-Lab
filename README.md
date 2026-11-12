@@ -30,7 +30,7 @@ I built this to get real hands on time with the stuff help desk and sysadmin rol
  lab.local                     joined to lab.local
 ```
 
-The M720q came off eBay. Before trusting it with anything, I ran MemTest86+ overnight (9 passes, zero errors) and checked the SSD in CrystalDiskInfo: 99% health, about 7.7TB written. Fine for a lab, and better than I expected from a box that probably spent its last life under someone's cubicle desk.
+The M720q came off eBay. Before trusting it with anything, I ran MemTest86+ overnight (9 passes, zero errors) and checked the SSD in CrystalDiskInfo: 99% health, about 7.7TB written. Seems like it was taken care of pretty well, better than I expected from a box that probably spent its last life under someone's cubicle desk!!
 
 About the domain name: `.local` works for a lab that's all Windows, but it's not what you'd pick for a real company (it can clash with Apple's Bonjour/mDNS, and it isn't a domain you can own). Next time I'd use a subdomain of a real domain.
 
@@ -48,7 +48,7 @@ I uploaded the Windows Server 2025 evaluation ISO plus the VirtIO driver ISO, th
 
 ![VM system settings](screenshots/03-dc01-vm-system-settings.png)
 
-I picked the Desktop Experience edition. The default option is Server Core (command line only), which I'll get to eventually, but not while I'm still learning AD.
+I picked the Desktop Experience edition. The default option is Server Core (command line only), which I'll get to eventually, but I wanted the GUI since its my first time messing with Active Dir.
 
 ![Picking Desktop Experience](screenshots/04-server-2025-desktop-experience.png)
 
@@ -114,11 +114,11 @@ Digging into the SystemLog output, everything it flagged was logged within about
 
 ![Partition and enterprise tests passing](screenshots/19-dcdiag-enterprise-tests.png)
 
-That's the part I'd actually use at a help desk: figuring out which errors matter and which ones are just the server waking up and grumbling before its coffee.
+That's the part I'd actually use at a help desk: figuring out which errors matter and which ones are just the server waking up and grumbling before its morning cup of joe.
 
 ## 6. Users, groups and OUs
 
-I went to make an OU called "Users" and AD said no, there's already one. Turns out the default Users and Computers folders aren't OUs at all, they're plain containers, and you can't link Group Policy to them. That's the whole reason to make your own. I created:
+I went to make an OU called "Users" and AD said no, there's already one. Turns out the default Users and Computers folders aren't OUs at all, they're plain containers (thanks windows), and you can't link Group Policy to them. That's the whole reason to make your own. I created:
 
 - **Lab Users**, **Lab Computers**, **Servers**, **Groups**, and later **Staff**
 - Test users John Smith (`jsmith`) and Mary Jones (`mjones`)
@@ -129,7 +129,7 @@ I went to make an OU called "Users" and AD said no, there's already one. Turns o
 
 ![My admin account in Domain Admins](screenshots/21-my-admin-account-domain-admins.png)
 
-Side quest: I made a test OU with "Protect from accidental deletion" checked and then couldn't delete it. The setting lives on the Object tab, and that tab only shows up after you turn on View > Advanced Features. (Works exactly as advertised. It protected the OU from me.)
+Side quest: I made a test OU with "Protect from accidental deletion" checked and then couldn't delete it. The setting lives on the Object tab, and that tab only shows up after you turn on View > Advanced Features. (Works exactly as advertised! It protected the OU from me.)
 
 ## 7. The Windows 11 client and the domain join
 
@@ -185,7 +185,7 @@ I made a Staff OU and moved both test users into it. My admin account stays out 
 
 ![Staff OU](screenshots/34-staff-ou.png)
 
-Created the share from the command line. My first try failed because of one space after the comma (`",full"` and `", full"` are not the same thing to `net share`):
+Created the share from the command line. My first try failed because of one space after the comma (fun fact: `",full"` and `", full"` are not the same thing to `net share`):
 
 ![net share syntax error](screenshots/35-net-share-syntax-error.png)
 
@@ -230,7 +230,7 @@ Logged into the client as `jsmith` and ran `gpupdate /force`. The S: drive showe
 
 ![gpresult for jsmith](screenshots/43-gpresult-jsmith.png)
 
-And Settings wouldn't open at all. Clicking it did nothing, and right clicking it doesn't even give you an Open option anymore. (Sorry John.)
+And Settings wouldn't open at all. Clicking it did nothing, and right clicking it doesn't even give you an Open option anymore (Sorry John)
 
 ![Settings blocked for jsmith](screenshots/44-settings-blocked.png)
 
@@ -252,20 +252,20 @@ The quick version, for anyone skimming:
 
 ## What I didn't do (on purpose)
 
-- **No DHCP role on dc01.** My router already hands out addresses, and two DHCP servers on one network will fight each other. That waits until I've got my own firewall/router running.
+- **No DHCP role on dc01.** My router already hands out addresses, and two DHCP servers on one network will fight each other. That waits until I've got my OPNsense firewall/router running (I'm short 1 dual port box for that at the moment).
 - **No changes to my home router's DNS.** Only the lab machines use dc01. If the lab goes down, nothing else in the apartment notices (and nobody comes asking why the TV stopped working).
 
 ## Notes
 
-- No passwords appear anywhere in this repo or the screenshots.
+- No passwords appear anywhere in this repo or the screenshots (definitely let me know please if any do!).
 - My public IPv6 addresses are blacked out in the screenshots. The `192.168.x.x` addresses are private and only mean something inside my apartment.
-- Both Windows VMs are eval editions and will expire eventually (that's what the snapshots are for).
+- Both Windows VMs are eval editions and will expire eventually. That's why we take snapshots folks.
 
 ## What's next
 
-- Run dcdiag again and point dc01 at an external time source (that NtpClient warning)
+- Run dcdiag again and point dc01 at an external time source (that NtpClient warning that i totally didn't see until after I shutdown the VMs while reviewing the screenshots)
 - Control test from the client with my own admin account
 - More GPOs: a desktop wallpaper, software restrictions, a logon script
 - Account lockout policy, and testing what a locked out user looks like from the help desk side
-- A small k3s cluster on the same Proxmox host
+- A small k3s cluster on the same Proxmox host; I've been told its overkill for a home lab but I want those exp points.
 - Syncing users to Microsoft Entra ID with Entra Connect
