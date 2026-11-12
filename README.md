@@ -1,6 +1,6 @@
 # Active Directory Lab
 
-I built a Windows domain from scratch on a used mini PC. There's a Windows Server 2025 domain controller, a Windows 11 client joined to it, a file share, and a few Group Policies you can actually see working. It all runs as VMs on Proxmox, and every screenshot in here is from my own build (mistakes included, there were a few).
+I built a Windows domain from scratch on a used mini PC. There's a Windows Server 2025 domain controller, a Windows 11 client joined to it, a file share, and a few Group Policies you can actually see working. It all runs as VMs on Proxmox, and every screenshot in here is from my own build (mistakes included, there were a few in case you're curious).
 
 I built this to get real hands on time with the stuff help desk and sysadmin roles live in every day: AD users and groups, DNS, domain joins, shares, permissions and GPOs.
 
