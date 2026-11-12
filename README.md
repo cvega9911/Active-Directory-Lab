@@ -36,7 +36,7 @@ About the domain name: `.local` works for a lab that's all Windows, but it's not
 
 ## 1. Proxmox
 
-Proxmox went on bare metal (ext4 on the NVMe), and I reserved the box's IP in my router so that the web interface stays at the same address. A fresh install points at the paid enterprise repos, which means the very first update fails. I disabled those and added the free no subscription repo.
+Proxmox went on bare metal (ext4 file on the NVMe, booted from a my handy dandy toolkit flash drive configured with Ventoy), and I reserved the box's IP in my router so that the web interface stays at the same address. A fresh install points at the paid enterprise repos, which means the very first update fails. I disabled those and added the free no subscription repo.
 
 ![Proxmox dashboard after install](screenshots/01-proxmox-dashboard.png)
 
